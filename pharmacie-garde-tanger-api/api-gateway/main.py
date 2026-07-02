@@ -96,19 +96,46 @@ def verify_token(token: str) -> Optional[dict]:
 
 # ── Rate limiting ─────────────────────────────────────────────────────────────
 req_counts: dict = {}
+banned_ips: dict = {}  # ip -> ban_until_timestamp
 
-def rate_limit(ip: str) -> bool:
+def check_rate_limit(ip: str, limit: int) -> bool:
     now = time.time()
     req_counts.setdefault(ip, [])
     req_counts[ip] = [t for t in req_counts[ip] if now - t < 60]
-    if len(req_counts[ip]) >= 60: return False
-    req_counts[ip].append(now); return True
+    if len(req_counts[ip]) >= limit:
+        return False
+    req_counts[ip].append(now)
+    return True
 
 @app.middleware("http")
 async def log_mw(request: Request, call_next):
-    start = time.time(); ip = request.client.host if request.client else "unknown"
-    if "/api/chat" in request.url.path and not rate_limit(ip):
-        return JSONResponse(429, {"detail": "Trop de requêtes."})
+    start = time.time()
+    ip = request.client.host if request.client else "unknown"
+    now = time.time()
+
+    # 1. Vérification du bannissement temporaire
+    if ip in banned_ips:
+        if now < banned_ips[ip]:
+            remaining = int(banned_ips[ip] - now)
+            return JSONResponse(
+                status_code=429,
+                content={"detail": f"IP temporairement bannie pour abus. Réessayez dans {remaining} secondes."}
+            )
+        else:
+            del banned_ips[ip]
+
+    # 2. Application du Rate Limiting sur les routes /api
+    path = request.url.path
+    if path.startswith("/api"):
+        limit = 60 if "/api/chat" in path else 100
+        if not check_rate_limit(ip, limit):
+            banned_ips[ip] = now + 900  # Bannir pour 15 minutes (900 secondes)
+            logger.warning(f"⚠️ IP {ip} bannie pour 15 minutes (seuil dépassé sur {path})")
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Trop de requêtes. Votre IP a été bannie pour 15 minutes."}
+            )
+
     resp = await call_next(request)
     logger.info(f"{ip} {request.method} {request.url.path} → {resp.status_code} ({(time.time()-start)*1000:.0f}ms)")
     return resp
