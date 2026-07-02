@@ -1,0 +1,254 @@
+<div class="admin-page">
+
+  <header class="admin-header">
+    <div class="admin-header-inner">
+      <button class="btn-back" (click)="retourAccueil()">← Retour</button>
+      <div class="admin-title-wrap">
+        <div class="admin-logo">⚙️</div>
+        <div>
+          <h1 class="admin-title">Administration</h1>
+          <p class="admin-subtitle">Pharmacies de Garde — Tanger</p>
+        </div>
+      </div>
+      <div class="admin-header-actions">
+        <button class="btn-profile" (click)="toggleProfile()">👤 {{ auth.currentUser?.nom }}</button>
+        <button class="btn-logout" (click)="logout()">🚪 Déconnexion</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="admin-container">
+
+    <!-- ── Statut trimestre ──────────────────────────────────────────────── -->
+    <section class="admin-card">
+      <h2 class="card-title">📅 Statut du trimestre actuel</h2>
+
+      <div *ngIf="isLoadingInfo()" class="loading-row">
+        <div class="spinner-sm"></div>
+        <span>Chargement...</span>
+      </div>
+
+      <div *ngIf="!isLoadingInfo()">
+        <div class="statut-badge" [ngClass]="statutClass">
+          <span>{{ statutIcon }}</span>
+          <span>{{ statutLabel }}</span>
+        </div>
+
+        <div *ngIf="trimestreInfo()?.donnees_disponibles" class="trimestre-details">
+          <div class="detail-row">
+            <span class="detail-key">📅 Période</span>
+            <span class="detail-val">{{ trimestreInfo()!.debut }} → {{ trimestreInfo()!.fin }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-key">⏳ Jours restants</span>
+            <span class="detail-val" [class.text-warning]="trimestreInfo()!.alerte">
+              {{ trimestreInfo()!.jours_restants }} jours
+            </span>
+          </div>
+          <div class="detail-row" *ngIf="trimestreInfo()!.upload_date">
+            <span class="detail-key">📤 Dernier import</span>
+            <span class="detail-val">{{ trimestreInfo()!.upload_date }}</span>
+          </div>
+        </div>
+
+        <div *ngIf="trimestreInfo()?.alerte_message" class="alerte-trimestre"
+             [class.alerte-warning]="trimestreInfo()!.donnees_disponibles"
+             [class.alerte-danger]="!trimestreInfo()!.donnees_disponibles">
+          {{ trimestreInfo()!.alerte_message }}
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Import PDF ────────────────────────────────────────────────────── -->
+    <section class="admin-card">
+      <h2 class="card-title">📄 Importer le planning PDF</h2>
+      <p class="card-desc">
+        Importez le fichier PDF du nouveau trimestre du
+        <strong>Syndicat des Pharmaciens d'Officine de Tanger</strong>.
+        Les nouvelles pharmacies détectées seront automatiquement ajoutées.
+      </p>
+
+      <label class="drop-zone" [class.has-file]="selectedFile()">
+        <input type="file" accept=".pdf" (change)="onFileSelected($event)" style="display:none" />
+        <div *ngIf="!selectedFile()" class="drop-content">
+          <div class="drop-icon">📂</div>
+          <p class="drop-text">Cliquez pour choisir un fichier PDF</p>
+          <small class="drop-hint">Planning du Syndicat des Pharmaciens de Tanger</small>
+        </div>
+        <div *ngIf="selectedFile()" class="drop-content">
+          <div class="drop-icon">📄</div>
+          <p class="drop-text">{{ selectedFile()!.name }}</p>
+          <small class="drop-hint">{{ (selectedFile()!.size / 1024).toFixed(0) }} Ko — Prêt à importer</small>
+        </div>
+      </label>
+
+      <button class="btn-import" [disabled]="!selectedFile() || isImporting()" (click)="importerPdf()">
+        <span *ngIf="!isImporting()">📤 Importer le planning</span>
+        <span *ngIf="isImporting()" class="btn-loading">
+          <span class="spinner-sm"></span> Import en cours...
+        </span>
+      </button>
+
+      <div *ngIf="importError()" class="result-banner result-error">❌ {{ importError() }}</div>
+
+      <div *ngIf="importResult()" class="result-banner result-success">
+        <div class="result-title">{{ importResult()!.message }}</div>
+        <div class="result-details">
+          <span>📅 {{ importResult()!.periode.debut }} → {{ importResult()!.periode.fin }}</span>
+          <span>📋 {{ importResult()!.jours_importes }} jours importés</span>
+          <span *ngIf="importResult()!.nouvelles_pharmacies > 0">
+            🆕 {{ importResult()!.nouvelles_pharmacies }} nouvelles pharmacies
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Profil Admin ──────────────────────────────────────────────────── -->
+    <section class="admin-card">
+      <div class="card-header-row">
+        <h2 class="card-title">👤 Mon profil</h2>
+        <button class="btn-toggle" (click)="toggleProfile()">
+          {{ showProfile() ? '▲ Fermer' : '✏️ Modifier' }}
+        </button>
+      </div>
+
+      <div *ngIf="!showProfile()" class="profile-summary">
+        <div class="detail-row">
+          <span class="detail-key">👤 Nom</span>
+          <span class="detail-val">{{ auth.currentUser?.nom }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-key">📧 Email</span>
+          <span class="detail-val">{{ auth.currentUser?.email }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-key">🔑 Rôle</span>
+          <span class="detail-val role-badge">{{ auth.currentUser?.role }}</span>
+        </div>
+      </div>
+
+      <div *ngIf="showProfile()" class="profile-form">
+        <div class="form-group">
+          <label>Nom</label>
+          <input type="text" [(ngModel)]="profNom" placeholder="Votre nom" />
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" [(ngModel)]="profEmail" placeholder="votre@email.com" />
+        </div>
+        <div class="form-divider">🔑 Changer le mot de passe (optionnel)</div>
+        <div class="form-group">
+          <label>Mot de passe actuel <span class="required">*</span></label>
+          <input type="password" [(ngModel)]="profCurrentPw" placeholder="Requis pour confirmer" />
+        </div>
+        <div class="form-group">
+          <label>Nouveau mot de passe</label>
+          <input type="password" [(ngModel)]="profNewPw" placeholder="Laisser vide pour ne pas changer" />
+        </div>
+        <div class="form-group" *ngIf="profNewPw">
+          <label>Confirmer le nouveau mot de passe</label>
+          <input type="password" [(ngModel)]="profNewPwConf" placeholder="Répéter le nouveau mot de passe" />
+        </div>
+
+        <div *ngIf="profError()" class="result-banner result-error">❌ {{ profError() }}</div>
+        <div *ngIf="profSuccess()" class="result-banner result-success">{{ profSuccess() }}</div>
+
+        <button class="btn-import" (click)="saveProfile()" [disabled]="profLoading()">
+          <span *ngIf="!profLoading()">💾 Enregistrer les modifications</span>
+          <span *ngIf="profLoading()" class="btn-loading">
+            <span class="spinner-sm"></span> Sauvegarde...
+          </span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ── Mot de passe oublié ───────────────────────────────────────────── -->
+    <section class="admin-card">
+      <div class="card-header-row">
+        <h2 class="card-title">🔒 Mot de passe oublié</h2>
+        <button class="btn-toggle" (click)="toggleReset()">
+          {{ showReset() ? '▲ Fermer' : '🔑 Réinitialiser' }}
+        </button>
+      </div>
+
+      <p class="card-desc" *ngIf="!showReset()">
+        Si vous avez oublié votre mot de passe, vous pouvez le réinitialiser ici.
+      </p>
+
+      <div *ngIf="showReset()">
+        <!-- Étape 1 : demander le token -->
+        <div *ngIf="resetStep() === 1">
+          <div class="form-group">
+            <label>Email du compte admin</label>
+            <input type="email" [(ngModel)]="resetEmail" placeholder="admin@email.com"
+                   (keyup.enter)="requestReset()" />
+          </div>
+          <div *ngIf="resetError()" class="result-banner result-error">❌ {{ resetError() }}</div>
+          <div *ngIf="resetSuccess()" class="result-banner result-success">{{ resetSuccess() }}</div>
+          <button class="btn-import" (click)="requestReset()" [disabled]="resetLoading()">
+            <span *ngIf="!resetLoading()">📧 Générer un token de réinitialisation</span>
+            <span *ngIf="resetLoading()" class="btn-loading">
+              <span class="spinner-sm"></span> Envoi...
+            </span>
+          </button>
+          <button class="btn-secondary-sm" (click)="resetStep.set(2)" style="margin-top:12px">
+            J'ai déjà un token →
+          </button>
+        </div>
+
+        <!-- Étape 2 : nouveau mot de passe -->
+        <div *ngIf="resetStep() === 2">
+          <div class="form-group">
+            <label>Token de réinitialisation</label>
+            <input type="text" [(ngModel)]="resetToken" placeholder="Collez le token ici" />
+          </div>
+          <div class="form-group">
+            <label>Nouveau mot de passe</label>
+            <input type="password" [(ngModel)]="resetNewPw" placeholder="Min. 6 caractères"
+                   (keyup.enter)="confirmReset()" />
+          </div>
+          <div *ngIf="resetError()" class="result-banner result-error">❌ {{ resetError() }}</div>
+          <div *ngIf="resetSuccess()" class="result-banner result-success">{{ resetSuccess() }}</div>
+          <button class="btn-import" (click)="confirmReset()" [disabled]="resetLoading()">
+            <span *ngIf="!resetLoading()">✅ Réinitialiser le mot de passe</span>
+            <span *ngIf="resetLoading()" class="btn-loading">
+              <span class="spinner-sm"></span> Réinitialisation...
+            </span>
+          </button>
+          <button class="btn-secondary-sm" (click)="resetStep.set(1)" style="margin-top:12px">
+            ← Retour
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Guide ─────────────────────────────────────────────────────────── -->
+    <section class="admin-card guide-card">
+      <h2 class="card-title">📖 Comment ça marche</h2>
+      <div class="guide-steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>Télécharger le PDF</strong>
+            <p>Récupérez le planning PDF du nouveau trimestre auprès du Syndicat des Pharmaciens d'Officine de Tanger.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>Importer avant l'expiration</strong>
+            <p>Une alerte apparaît automatiquement quand il reste moins de 14 jours. Les nouvelles pharmacies sont automatiquement enregistrées.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>L'application se met à jour instantanément</strong>
+            <p>Les données sont disponibles pour tous les utilisateurs sans redémarrage.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>

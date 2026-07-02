@@ -1,0 +1,230 @@
+<div [class.dark-mode]="darkMode()">
+
+<header class="header">
+  <div class="header-top-bar">
+    <div class="container">
+      <div class="top-bar-inner">
+        <span class="top-bar-text">🏥 Syndicat des Pharmaciens d'Officine de Tanger</span>
+        <button class="btn-dark-toggle" (click)="toggleDark()">
+          <span *ngIf="!darkMode()">🌙 Mode nuit</span>
+          <span *ngIf="darkMode()">☀️ Mode clair</span>
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="container">
+    <div class="header-inner">
+      <div class="logo-wrap">
+        <div class="logo-ring"></div>
+        <div class="logo">＋</div>
+      </div>
+      <div class="header-text">
+        <p class="salutation">{{ salutation }} 👋</p>
+        <h1>Pharmacies de garde</h1>
+        <p class="subtitle">Tanger — Trouvez une pharmacie ouverte près de chez vous</p>
+        <div class="header-badge">
+          <span class="dot"></span>
+          SERVICE ACTIF 24H/24 · 7J/7
+        </div>
+      </div>
+    </div>
+  </div>
+  <svg class="header-wave" viewBox="0 0 1440 50" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,25 C240,50 480,0 720,25 C960,50 1200,0 1440,25 L1440,50 L0,50 Z" fill="var(--bg)"/>
+  </svg>
+</header>
+
+<main class="container">
+
+  <!-- ── Alerte trimestre (fin proche ou données expirées) ──────────────── -->
+  <div *ngIf="alerteTrimestre && alerteMessage" class="alerte-banner"
+       [class.alerte-warning]="donneesDispo"
+       [class.alerte-danger]="!donneesDispo">
+    <span class="alerte-icon">{{ donneesDispo ? '⚠️' : '🚫' }}</span>
+    <span class="alerte-text">{{ alerteMessage }}</span>
+  </div>
+
+  <!-- ── Erreur de connexion au backend ────────────────────────────────── -->
+  <div *ngIf="apiError()" class="alerte-banner alerte-danger">
+    <span class="alerte-icon">🔌</span>
+    <span class="alerte-text">{{ apiError() }}</span>
+    <button class="btn-retry" (click)="loadGardes()">↻ Réessayer</button>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-icon">🏪</div>
+      <div class="stat-info">
+        <div class="stat-value">150+</div>
+        <div class="stat-label">Pharmacies à Tanger</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">🗺️</div>
+      <div class="stat-info">
+        <div class="stat-value">12</div>
+        <div class="stat-label">Quartiers couverts</div>
+      </div>
+    </div>
+    <div class="stat-card highlight">
+      <div class="stat-icon">🕐</div>
+      <div class="stat-info">
+        <div class="stat-value">{{ totalPharmacies }}</div>
+        <div class="stat-label">De garde aujourd'hui</div>
+      </div>
+    </div>
+    <div class="stat-card" [class.alerte-card]="alerteTrimestre">
+      <div class="stat-icon">📅</div>
+      <div class="stat-info">
+        <div class="stat-value" *ngIf="trimestreInfo()?.fin">
+          {{ trimestreInfo()!.jours_restants }}j
+        </div>
+        <div class="stat-value" *ngIf="!trimestreInfo()?.fin">—</div>
+        <div class="stat-label">
+          <span *ngIf="trimestreInfo()?.fin">Jours restants (fin le {{ trimestreInfo()!.fin }})</span>
+          <span *ngIf="!trimestreInfo()?.fin">Planning trimestre</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <div class="section-header">
+      <h2 class="section-title">🚨 Numéros d'urgence</h2>
+      <span class="section-sub">Disponibles 24h/24</span>
+    </div>
+    <div class="urgences-grid">
+      <a *ngFor="let u of urgences" [href]="'tel:' + u.numero" class="urgence-card" [style.--u-color]="u.couleur">
+        <div class="urgence-icon">{{ u.icon }}</div>
+        <div class="urgence-info">
+          <div class="urgence-nom">{{ u.nom }}</div>
+          <div class="urgence-num">{{ u.numero }}</div>
+        </div>
+        <div class="urgence-call">📞</div>
+      </a>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <div class="section-header">
+      <h2 class="section-title">💊 Pharmacies de garde</h2>
+      <span class="section-sub">{{ dateLabel }}</span>
+    </div>
+
+    <div class="toolbar">
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="text" placeholder="Rechercher une pharmacie..."
+               [ngModel]="recherche()" (ngModelChange)="recherche.set($event)" />
+      </div>
+      <button class="btn-map-toggle" [class.active]="showMap()" (click)="toggleMap()">
+        <span>🗺️</span>
+        <span>{{ showMap() ? 'Masquer' : 'Carte' }}</span>
+      </button>
+    </div>
+
+    <div class="date-nav">
+      <button class="btn-nav" (click)="changerDate(-1)">&#8592; Précédent</button>
+      <div class="date-center">
+        <div class="date-label">{{ dateLabel }}</div>
+        <div class="date-badges">
+          <span class="badge-today" *ngIf="isToday">🔴 Aujourd'hui</span>
+          <span class="count" *ngIf="totalPharmacies > 0">{{ totalPharmacies }} pharmacie(s)</span>
+        </div>
+      </div>
+      <button class="btn-nav" (click)="changerDate(1)">Suivant &#8594;</button>
+    </div>
+
+    <div *ngIf="showMap()" class="map-container">
+      <div id="home-map"></div>
+      <p class="map-hint">📍 Cliquez sur un marqueur pour voir les détails</p>
+    </div>
+
+    <!-- ── Spinner de chargement ────────────────────────────────────────── -->
+    <div *ngIf="isLoading()" class="loading-state">
+      <div class="spinner"></div>
+      <p>Chargement des pharmacies...</p>
+    </div>
+
+    <!-- ── Données non disponibles (trimestre expiré ou non importé) ─────── -->
+    <div *ngIf="!isLoading() && !donneesDispo && !apiError()" class="unavailable-state">
+      <span class="unavailable-icon">📋</span>
+      <h3>Données non disponibles</h3>
+      <p>Le planning de garde pour ce trimestre n'a pas encore été importé ou est expiré.</p>
+      <small>L'administrateur doit importer le planning PDF du nouveau trimestre.</small>
+    </div>
+
+    <!-- ── Aucune pharmacie pour cette date ──────────────────────────────── -->
+    <div *ngIf="!isLoading() && donneesDispo && !apiError() && pharmaciesFiltrees().length === 0" class="empty-state">
+      <span class="empty-icon">💊</span>
+      <p>Aucune pharmacie de garde pour cette date.</p>
+      <small>Consultez une autre date ou vérifiez votre recherche.</small>
+    </div>
+
+    <!-- ── Liste des gardes ───────────────────────────────────────────────── -->
+    <div *ngIf="!isLoading() && donneesDispo">
+      <div *ngFor="let garde of pharmaciesFiltrees()" class="garde-section">
+        <div class="garde-header" [ngClass]="garde.type.toLowerCase()">
+          <div class="garde-type-label">
+            <span *ngIf="garde.type === 'GARDE_24H'">🕐 Garde 24h</span>
+            <span *ngIf="garde.type === 'WEEKEND'">📅 Weekend</span>
+            <span *ngIf="garde.type === 'JOUR_FERIE'">🎉 Jour férié</span>
+          </div>
+          <span class="garde-count">{{ garde.pharmacies.length }} pharmacies</span>
+        </div>
+        <div class="pharmacies-grid">
+          <div *ngFor="let nom of garde.pharmacies"
+               class="pharmacie-card"
+               [class.clickable]="hasDetail(nom)"
+               (click)="goToDetail(nom)">
+            <div class="pharm-icon">＋</div>
+            <div class="pharm-info">
+              <span class="pharm-name">{{ nom }}</span>
+              <span class="pharm-sub has-detail" *ngIf="hasDetail(nom)">Infos disponibles</span>
+              <span class="pharm-sub no-info" *ngIf="!hasDetail(nom)">Introuvable sur Maps</span>
+            </div>
+            <span class="arrow" *ngIf="hasDetail(nom)">›</span>
+            <span class="open-badge" *ngIf="isToday && garde.type === 'GARDE_24H'">● Ouverte</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <div class="section-header">
+      <h2 class="section-title">💡 Conseils pratiques</h2>
+      <span class="section-sub">Informations utiles</span>
+    </div>
+    <div class="conseils-grid">
+      <div *ngFor="let c of conseils; let i = index" class="conseil-card" [class]="'delay-' + i">
+        <div class="conseil-icon">{{ c.icon }}</div>
+        <div class="conseil-content">
+          <div class="conseil-titre">{{ c.titre }}</div>
+          <div class="conseil-texte">{{ c.texte }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-logo">＋ Pharmacies de Garde Tanger</div>
+      <div class="footer-links">
+        <span>© 2026 Syndicat des Pharmaciens d'Officine de Tanger</span>
+        <span class="sep">·</span>
+        <span *ngIf="trimestreInfo()?.fin">Planning du {{ trimestreInfo()!.debut }} au {{ trimestreInfo()!.fin }}</span>
+        <span *ngIf="!trimestreInfo()?.fin">Planning en attente d'import</span>
+        <span class="sep">·</span>
+        <button class="footer-admin-btn" (click)="goToAdmin()">⚙️ Admin</button>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<app-chatbot></app-chatbot>
+
+</div>

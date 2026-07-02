@@ -1,0 +1,67 @@
+<div class="detail-page">
+  <button class="btn-back" (click)="goBack()">&#8592; Retour</button>
+
+  <div *ngIf="isLoading()" class="loading-state">
+    <div class="spinner"></div>
+    <p>Chargement...</p>
+  </div>
+
+  <div *ngIf="!isLoading() && notFound()" class="not-found">
+    <span class="not-found-icon">🔍</span>
+    <h2>Pharmacie introuvable</h2>
+    <p>Aucune information disponible pour cette pharmacie.</p>
+  </div>
+
+  <div *ngIf="!isLoading() && pharmacie()" class="detail-card">
+
+    <div class="detail-header">
+      <div class="pharm-icon-large">＋</div>
+      <div class="header-info">
+        <h1>Pharmacie {{ pharmacie()!.nom }}</h1>
+        <span class="badge-info">✓ Informations vérifiées</span>
+      </div>
+    </div>
+
+    <div class="detail-body">
+
+      <div class="info-row" *ngIf="pharmacie()!.adresse">
+        <div class="info-icon-wrap">📍</div>
+        <div class="info-content">
+          <div class="info-label">Adresse</div>
+          <div class="info-value">{{ pharmacie()!.adresse }}</div>
+        </div>
+      </div>
+
+      <div class="info-row" *ngIf="pharmacie()!.telephone">
+        <div class="info-icon-wrap">📞</div>
+        <div class="info-content">
+          <div class="info-label">Téléphone</div>
+          <a [href]="'tel:' + pharmacie()!.telephone" class="tel-link">{{ pharmacie()!.telephone }}</a>
+        </div>
+      </div>
+
+      <div class="info-row" *ngIf="pharmacie()!.lat">
+        <div class="info-icon-wrap">🗺️</div>
+        <div class="info-content">
+          <div class="info-label">Localisation GPS</div>
+          <div class="info-value">{{ pharmacie()!.lat | number:'1.4-4' }}°N, {{ pharmacie()!.lng | number:'1.4-4' }}°O</div>
+          <a [href]="'https://www.google.com/maps?q=' + pharmacie()!.lat + ',' + pharmacie()!.lng"
+             target="_blank" class="gmaps-link">🗺 Ouvrir dans Google Maps</a>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="detail-actions">
+      <button *ngIf="pharmacie()!.telephone" class="btn-action btn-call" (click)="appeler()">
+        📞 Appeler
+      </button>
+      <button *ngIf="pharmacie()!.lat" class="btn-action btn-gmaps" (click)="ouvrirMaps()">
+        🗺️ Google Maps
+      </button>
+    </div>
+
+    <div *ngIf="pharmacie()!.lat" id="detail-map" class="detail-map"></div>
+
+  </div>
+</div>

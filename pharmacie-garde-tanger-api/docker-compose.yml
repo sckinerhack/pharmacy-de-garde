@@ -1,0 +1,147 @@
+services:
+
+  # ── Base de donnees SQL Server (utilisee uniquement par docker compose) ────
+  # En local sous Windows, tu utilises ton propre SQL Server + SSMS (Windows
+  # Authentication). Ce conteneur sert seulement quand tu lances TOUT le
+  # projet via "docker compose up" (ex: deploiement, demo complete).
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD:-Pharma2026!Strong}
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - pharma-network
+
+  # ── Initialisation de la base (cree les tables une seule fois au demarrage) ─
+  sqlserver-init:
+    image: mcr.microsoft.com/mssql-tools
+    container_name: sqlserver-init
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    volumes:
+      - ./database:/scripts
+    entrypoint: >
+      /opt/mssql-tools/bin/sqlcmd -S sqlserver -U sa -P ${MSSQL_SA_PASSWORD:-Pharma2026!Strong} -C -i /scripts/init_sqlserver.sql
+    environment:
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD:-Pharma2026!Strong}
+    networks:
+      - pharma-network
+
+  # ── Pharmacies de Garde (Python FastAPI) ─────────────────────────────────
+  pharmacie-service:
+    build:
+      context: ./pharmacie-service
+      dockerfile: Dockerfile
+    container_name: pharmacie-service
+    ports:
+      - "8001:8001"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DB_AUTH=sql
+      - DB_SERVER=sqlserver
+      - DB_NAME=pharmacie_db
+      - DB_USER=sa
+      - DB_PASSWORD=${MSSQL_SA_PASSWORD:-Pharma2026!Strong}
+      - DB_DRIVER=ODBC Driver 18 for SQL Server
+    depends_on:
+      sqlserver-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - pharma-network
+
+  # ── Chatbot IA (Python FastAPI) ───────────────────────────────────────────
+  chatbot-service:
+    build:
+      context: ./chatbot-service
+      dockerfile: Dockerfile
+    container_name: chatbot-service
+    ports:
+      - "8002:8002"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - pharma-network
+
+  # ── Auth Service (Spring Boot / Java) ─────────────────────────────────────
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_URL=jdbc:sqlserver://sqlserver:1433;databaseName=pharmacie_db;encrypt=false;trustServerCertificate=true
+      - DB_USER=sa
+      - DB_PASSWORD=${MSSQL_SA_PASSWORD:-Pharma2026!Strong}
+      - JWT_SECRET=${JWT_SECRET:-pharmacie_tanger_secret_2026}
+    depends_on:
+      sqlserver-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - pharma-network
+
+  # ── API Gateway (Python FastAPI) — Auth + Proxy ───────────────────────────
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PHARMACIE_SERVICE_URL=http://pharmacie-service:8001
+      - CHATBOT_SERVICE_URL=http://chatbot-service:8002
+      - DB_AUTH=sql
+      - DB_SERVER=sqlserver
+      - DB_NAME=pharmacie_db
+      - DB_USER=sa
+      - DB_PASSWORD=${MSSQL_SA_PASSWORD:-Pharma2026!Strong}
+      - DB_DRIVER=ODBC Driver 18 for SQL Server
+      - JWT_SECRET=${JWT_SECRET:-pharmacie_tanger_secret_2026}
+    depends_on:
+      pharmacie-service:
+        condition: service_healthy
+      chatbot-service:
+        condition: service_healthy
+      sqlserver-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - pharma-network
+
+volumes:
+  sqlserver_data:
+
+networks:
+  pharma-network:
+    driver: bridge

@@ -1,0 +1,43 @@
+<div class="auth-page">
+  <div class="auth-card">
+
+    <div class="auth-logo">
+      <div class="logo-circle">＋</div>
+      <h1>Pharmacies de Garde</h1>
+      <p class="auth-subtitle">Tanger — Espace Administrateur</p>
+    </div>
+
+    <div class="auth-form">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" [(ngModel)]="email" placeholder="votre@email.com"
+               (keyup.enter)="login()" autocomplete="email"/>
+      </div>
+
+      <div class="form-group">
+        <label>Mot de passe</label>
+        <input type="password" [(ngModel)]="password" placeholder="••••••••"
+               (keyup.enter)="login()" autocomplete="current-password"/>
+      </div>
+
+      <div *ngIf="error()" class="auth-error">{{ error() }}</div>
+
+      <button class="btn-primary" (click)="login()" [disabled]="loading()">
+        <span *ngIf="!loading()">🔐 Se connecter</span>
+        <span *ngIf="loading()" class="btn-spinner">⏳ Connexion...</span>
+      </button>
+
+      <div class="auth-divider"><span>ou</span></div>
+
+      <button class="btn-secondary" (click)="continuerSansLogin()">
+        👤 Continuer sans connexion
+      </button>
+
+      <p class="auth-hint">
+        💡 Cet espace est réservé à l'administrateur du planning.<br>
+        Les visiteurs n'ont pas besoin de compte.
+      </p>
+    </div>
+
+  </div>
+</div>
